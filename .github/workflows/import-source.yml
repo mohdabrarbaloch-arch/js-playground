@@ -1,0 +1,43 @@
+name: Import playground source
+
+# One-shot import: fetches the verified source bytes, checks the SHA-256,
+# and commits them as index.html at the repo root.
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download source
+        run: |
+          curl -fsSL -o index.html "https://static.teamily.ai/files/74002aae-dfff-459b-b5b0-c9837ead0776/playground_source.txt"
+          echo "downloaded bytes: $(wc -c < index.html)"
+
+      - name: Verify checksum
+        run: |
+          EXPECTED="ef5f750c2a814852a0bce13a64606a5bcd6aed12ffc094756a6bab84feccdf4d"
+          ACTUAL=$(sha256sum index.html | cut -d' ' -f1)
+          echo "expected: $EXPECTED"
+          echo "actual:   $ACTUAL"
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::Checksum mismatch - refusing to commit"
+            exit 1
+          fi
+          echo "Checksum OK"
+
+      - name: Commit index.html
+        run: |
+          git config user.name "Abrar Baloch"
+          git config user.email "mohdabrarbaloch@gmail.com"
+          git add index.html
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add JS playground (single-file app)"
+            git push
+          fi
