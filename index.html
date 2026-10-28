@@ -1,0 +1,2476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<title>JS Playground — vanilla JavaScript, in your browser</title>
+<meta name="description" content="A browser-based JavaScript playground: split-pane editor and console, sandboxed Web Worker runner, snippet library, execution timing and heap stats." />
+<style>
+  :root {
+    --bg: #090c12;
+    --panel: #0f141d;
+    --panel-2: #131924;
+    --panel-3: #18202d;
+    --line: #1e2735;
+    --line-2: #2a3547;
+    --fg: #e2e8f2;
+    --fg-2: #b0bccd;
+    --muted: #78869c;
+    --amber: #ffb454;
+    --amber-soft: rgba(255, 180, 84, 0.12);
+    --teal: #56d1c3;
+    --green: #7ee787;
+    --red: #ff6b78;
+    --yellow: #ffd166;
+    --blue: #79b8ff;
+    --pink: #f38ba8;
+    --mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --lh: 22px;
+    --fs: 13px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  ::selection { background: rgba(86, 209, 195, 0.28); }
+
+  .app {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    flex: none;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 14px 0 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    min-width: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .logo {
+    width: 34px; height: 34px; flex: none;
+    display: grid; place-items: center;
+    border-radius: 9px;
+    background: var(--amber);
+    color: #21160a;
+    font: 700 15px/1 var(--mono);
+    letter-spacing: -1px;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+  }
+  .brand-text { min-width: 0; }
+  .brand-text h1 {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 650;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+  .brand-text p {
+    margin: 2px 0 0;
+    font-size: 11.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 11px;
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    background: var(--panel-2);
+    color: var(--fg-2);
+    font: 11.5px/1 var(--mono);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .pill:hover { border-color: #3a4860; color: var(--fg); background: var(--panel-3); }
+  .pill .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px rgba(126, 231, 135, 0.55);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
+    padding: 0 13px;
+    border-radius: 9px;
+    border: 1px solid var(--line-2);
+    background: var(--panel-2);
+    color: var(--fg-2);
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s, border-color .15s, color .15s, transform .08s;
+  }
+  .btn:hover { background: var(--panel-3); border-color: #3a4860; color: var(--fg); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+  .btn.run {
+    background: var(--amber);
+    border-color: #ffc274;
+    color: #241708;
+    font-weight: 700;
+    padding: 0 12px 0 14px;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.16);
+  }
+  .btn.run:hover { background: #ffc272; border-color: #ffd39a; color: #241708; }
+  .btn.run.stop {
+    background: #2a1418;
+    border-color: #54252c;
+    color: #ff9aa4;
+  }
+  .btn.run.stop:hover { background: #351a1f; color: #ffb4bb; }
+  .btn.run .run-icon { font-size: 10px; line-height: 1; }
+  .btn.run .kbd-hint {
+    margin-left: 3px;
+    padding-left: 8px;
+    border-left: 1px solid rgba(36, 23, 8, 0.25);
+    font: 600 10.5px/1 var(--mono);
+    opacity: .7;
+  }
+  .btn.run.stop .kbd-hint { display: none; }
+
+  .ghost { background: transparent; }
+  .icon-btn {
+    width: 30px; height: 30px; padding: 0;
+    display: grid; place-items: center;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .icon-btn:hover { background: var(--panel-3); color: var(--fg); border-color: var(--line-2); }
+
+  /* ---------- workspace ---------- */
+  .workspace {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    background: var(--panel);
+    overflow: hidden;
+  }
+  .pane-head {
+    flex: none;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 10px 0 13px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-2);
+    min-width: 0;
+  }
+  .pane-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--fg-2);
+    white-space: nowrap;
+    flex: none;
+  }
+  .pane-sub {
+    font-size: 11.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .pane-head .spacer { flex: 1 1 auto; min-width: 4px; }
+
+  /* ---------- sidebar ---------- */
+  .sidebar {
+    flex: none;
+    width: 236px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+  }
+  .sidebar-head { padding: 12px 12px 8px; }
+  .sidebar-head h2 {
+    margin: 0 0 9px;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .search {
+    width: 100%;
+    height: 30px;
+    padding: 0 9px;
+    border-radius: 8px;
+    border: 1px solid var(--line-2);
+    background: var(--panel-2);
+    color: var(--fg);
+    font-size: 12px;
+    outline: none;
+  }
+  .search::placeholder { color: #5f6c80; }
+  .search:focus { border-color: var(--teal); background: var(--panel-3); }
+
+  .snip-list {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 2px 8px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #2b3547 transparent;
+  }
+  .snip-group {
+    margin: 10px 4px 5px;
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5d6a7e;
+    font-weight: 700;
+  }
+  .snip {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 9px;
+    margin-bottom: 2px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--fg-2);
+    cursor: pointer;
+    position: relative;
+    transition: background .13s, color .13s, border-color .13s;
+  }
+  .snip:hover { background: var(--panel-2); color: var(--fg); }
+  .snip.active {
+    background: var(--panel-3);
+    border-color: var(--line-2);
+    color: var(--fg);
+  }
+  .snip.active::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 9px; bottom: 9px;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--amber);
+  }
+  .snip-name {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 550;
+    line-height: 1.35;
+    padding-left: 2px;
+  }
+  .snip-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    padding-left: 2px;
+    font: 10px/1 var(--mono);
+    color: var(--muted);
+  }
+  .tag {
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    letter-spacing: 0.04em;
+  }
+  .snip.active .tag { background: rgba(255, 255, 255, 0.04); }
+  .t-scope { color: var(--amber); }
+  .t-async { color: var(--teal); }
+  .t-data { color: var(--blue); }
+  .t-runtime { color: var(--green); }
+  .t-syntax { color: var(--pink); }
+  .t-pitfall { color: var(--red); }
+
+  .sidebar-foot {
+    flex: none;
+    padding: 10px 12px;
+    border-top: 1px solid var(--line);
+    font-size: 10.5px;
+    line-height: 1.7;
+    color: var(--muted);
+  }
+  .sidebar-foot kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    border: 1px solid var(--line-2);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    font: 10px/1.4 var(--mono);
+    color: var(--fg-2);
+  }
+
+  /* ---------- editor ---------- */
+  .editor-pane { flex: 1 1 auto; }
+  .editor-shell {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+    position: relative;
+    background: var(--panel);
+  }
+  .gutter {
+    flex: none;
+    width: 46px;
+    padding: 12px 0;
+    overflow: hidden;
+    border-right: 1px solid var(--line);
+    background: #0c1119;
+    user-select: none;
+  }
+  .gutter-inner { will-change: transform; }
+  .ln {
+    height: var(--lh);
+    line-height: var(--lh);
+    padding-right: 10px;
+    text-align: right;
+    font: var(--fs)/var(--lh) var(--mono);
+    color: #414e63;
+    transition: color .1s;
+  }
+  .ln.active { color: var(--fg-2); }
+  .ln.err { color: #ffb3ba; background: rgba(255, 107, 120, 0.1); }
+
+  .code-wrap { flex: 1 1 auto; position: relative; min-width: 0; overflow: hidden; }
+  .hl, #code {
+    margin: 0;
+    font: var(--fs)/var(--lh) var(--mono);
+    tab-size: 2;
+    letter-spacing: 0;
+    white-space: pre;
+    word-spacing: normal;
+  }
+  .hl {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    overflow: hidden;
+    pointer-events: none;
+    color: var(--fg);
+  }
+  .hl-inner {
+    display: block;
+    padding: 12px 16px 40px;
+    will-change: transform;
+  }
+  #code {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 12px 16px 40px;
+    border: 0;
+    resize: none;
+    outline: none;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--amber);
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #2b3547 transparent;
+  }
+  #code::-webkit-scrollbar { width: 10px; height: 10px; }
+  #code::-webkit-scrollbar-thumb { background: #2b3547; border-radius: 6px; border: 2px solid var(--panel); }
+  #code::-webkit-scrollbar-corner { background: transparent; }
+
+  /* syntax colours */
+  .kw { color: #ff9ec7; }
+  .lit { color: #ffb454; }
+  .num { color: #c3a6ff; }
+  .str { color: #9ee493; }
+  .cm { color: #5d6b7f; font-style: italic; }
+  .bi { color: #6fc3ff; }
+  .fn { color: #ffd48a; }
+  .prop { color: #9fd3ff; }
+  .punc { color: #91a0b6; }
+
+  /* ---------- splitter ---------- */
+  .splitter {
+    flex: none;
+    width: 7px;
+    cursor: col-resize;
+    background: var(--bg);
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    position: relative;
+    touch-action: none;
+  }
+  .splitter::after {
+    content: "";
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 3px; height: 34px;
+    transform: translate(-50%, -50%);
+    border-radius: 2px;
+    background: #2c3749;
+    transition: background .15s, height .15s;
+  }
+  .splitter:hover::after { background: var(--amber); height: 52px; }
+  body.dragging { cursor: col-resize; user-select: none; }
+  body.dragging .splitter::after { background: var(--amber); }
+
+  /* ---------- console ---------- */
+  .console-pane {
+    flex: none;
+    width: 440px;
+    min-width: 260px;
+    max-width: 70%;
+    background: #0b1017;
+  }
+  .console-pane .pane-head { background: var(--panel-2); }
+  .console-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4px 0 26px;
+    scrollbar-width: thin;
+    scrollbar-color: #2b3547 transparent;
+    font: 12.6px/1.62 var(--mono);
+  }
+  .console-body::-webkit-scrollbar { width: 10px; }
+  .console-body::-webkit-scrollbar-thumb { background: #2b3547; border-radius: 6px; border: 2px solid #0b1017; }
+
+  .empty {
+    padding: 26px 18px;
+    color: var(--muted);
+    font: 12px/1.75 var(--mono);
+  }
+  .empty b { color: var(--fg-2); font-weight: 600; display: block; margin-bottom: 6px; font-family: var(--sans); font-size: 12.5px; }
+  .empty code { color: var(--amber); }
+
+  .run-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 12px 12px 6px;
+    color: #5f6d81;
+    font: 10px/1 var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .run-head::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--line); }
+  .run-head .n { color: var(--fg-2); }
+
+  .entry {
+    display: flex;
+    gap: 8px;
+    padding: 2px 14px 2px 10px;
+    border-left: 2px solid transparent;
+    animation: fade .16s ease-out;
+  }
+  @keyframes fade { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+  .entry .marker {
+    flex: none;
+    width: 11px;
+    text-align: center;
+    color: #4b5a70;
+    user-select: none;
+  }
+  .entry .body {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: #c9d3e2;
+  }
+  .entry.info .marker { color: var(--blue); }
+  .entry.warn { border-left-color: #574414; background: rgba(255, 209, 102, 0.045); }
+  .entry.warn .marker { color: var(--yellow); }
+  .entry.warn .body { color: #ffe1a0; }
+  .entry.error { border-left-color: #5c2229; background: rgba(255, 107, 120, 0.06); }
+  .entry.error .marker { color: var(--red); }
+  .entry.error .body { color: #ffb6bd; }
+  .entry.table .body { color: #c2d4e6; }
+  .entry.result {
+    margin-top: 2px;
+    border-left-color: #24524c;
+    background: rgba(86, 209, 195, 0.05);
+  }
+  .entry.result .marker { color: var(--teal); }
+  .entry.result .body { color: #9ff0e4; }
+  .entry.result .body .kind {
+    color: #4e8b84;
+    margin-right: 6px;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+  }
+  .entry.sys .body { color: #8695ab; }
+  .entry .stack {
+    display: block;
+    margin-top: 4px;
+    color: #8a7080;
+    font-size: 11.4px;
+    line-height: 1.55;
+  }
+
+  .summary {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 6px 12px 4px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    font: 10.5px/1 var(--mono);
+    color: var(--muted);
+  }
+  .summary .ok { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px rgba(126, 231, 135, .5); }
+  .summary .bad { width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+  .summary b { color: var(--fg-2); font-weight: 600; }
+  .summary .sep { color: #3a475a; }
+
+  .late-tag {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(255, 180, 84, 0.1);
+    color: #b98849;
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    vertical-align: 1px;
+  }
+
+  .mini-select {
+    height: 24px;
+    padding: 0 6px;
+    border-radius: 6px;
+    border: 1px solid var(--line-2);
+    background: var(--panel-3);
+    color: var(--fg-2);
+    font: 10.5px/1 var(--mono);
+    outline: none;
+    cursor: pointer;
+  }
+  .mini-select:focus { border-color: var(--teal); }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 5px;
+    border: 1px solid var(--line);
+    background: var(--panel-3);
+    color: var(--fg-2);
+    font: 10.5px/1 var(--mono);
+    white-space: nowrap;
+  }
+  .chip.now { color: var(--amber); border-color: #4a3a22; background: #221a10; }
+  .chip.bad { color: #ffa7b0; border-color: #4d2127; background: #221216; }
+
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--amber);
+    animation: pulse 1s infinite ease-in-out;
+  }
+  @keyframes pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+  /* ---------- status bar ---------- */
+  .statusbar {
+    flex: none;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    font: 10.5px/1 var(--mono);
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .statusbar .sb { display: inline-flex; align-items: center; gap: 6px; }
+  .statusbar .grow { flex: 1 1 auto; }
+  .statusbar .v { color: var(--fg-2); }
+  .statusbar .dot-sep { color: #334052; }
+
+  /* ---------- env popover ---------- */
+  .popwrap { position: relative; }
+  .popover {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 290px;
+    padding: 12px;
+    border-radius: 11px;
+    border: 1px solid var(--line-2);
+    background: #10161f;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+    z-index: 60;
+    display: none;
+  }
+  .popover.open { display: block; }
+  .popover h3 {
+    margin: 0 0 9px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .popover .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    border-bottom: 1px dashed #1a222e;
+    font: 11px/1.5 var(--mono);
+  }
+  .popover .row:last-child { border-bottom: 0; }
+  .popover .row span:first-child { color: var(--muted); }
+  .popover .row span:last-child { color: var(--fg-2); text-align: right; overflow-wrap: anywhere; }
+  .popover .note {
+    margin: 9px 0 0;
+    font: 10.5px/1.6 var(--mono);
+    color: #5f6d81;
+  }
+
+  .mobile-only { display: none; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1080px) {
+    .console-pane { width: 380px; }
+    .sidebar { width: 208px; }
+  }
+  @media (max-width: 900px) {
+    .topbar { height: 54px; gap: 10px; }
+    .brand-text p { display: none; }
+    .pill { display: none; }
+    .workspace { flex-direction: column; }
+    .sidebar { display: none; }
+    .splitter { display: none; }
+    .editor-pane { flex: 1 1 55%; min-height: 180px; }
+    .console-pane {
+      flex: 1 1 45%;
+      width: auto;
+      max-width: none;
+      min-width: 0;
+      min-height: 160px;
+      border-top: 1px solid var(--line-2);
+    }
+    .mobile-only { display: inline-flex; }
+    .gutter { width: 38px; }
+    .ln { padding-right: 7px; }
+    .statusbar .hide-sm { display: none; }
+  }
+  @media (max-width: 560px) {
+    .brand-text h1 { font-size: 13px; }
+    .btn { padding: 0 10px; font-size: 12px; }
+    .btn.run .kbd-hint { display: none; }
+    .pane-sub { display: none; }
+    .console-body { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">{ }</div>
+      <div class="brand-text">
+        <h1>JS Playground</h1>
+        <p>Vanilla JavaScript · executed in a sandboxed Web Worker</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <div class="popwrap">
+        <button class="pill" id="envBtn" aria-haspopup="true" aria-expanded="false" title="Engine &amp; runtime details">
+          <span class="dot"></span><span id="engineLabel">detecting…</span>
+        </button>
+        <div class="popover" id="envPop" role="dialog" aria-label="Runtime environment"></div>
+      </div>
+      <button class="btn ghost" id="clearBtn" title="Clear console (Ctrl+L)">Clear</button>
+      <button class="btn run" id="runBtn" title="Run code (Ctrl+Enter / ⌘+Enter)">
+        <span class="run-icon" id="runIcon">▶</span><span class="run-label" id="runLabel">Run</span><span class="kbd-hint">⌘↵</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <h2>Snippet library</h2>
+        <input class="search" id="snipSearch" type="search" placeholder="Filter snippets…" aria-label="Filter snippets" />
+      </div>
+      <div class="snip-list" id="snipList"></div>
+      <div class="sidebar-foot">
+        <kbd>Ctrl</kbd>+<kbd>↵</kbd> run &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>L</kbd> clear<br />
+        <kbd>Ctrl</kbd>+<kbd>/</kbd> comment &nbsp;·&nbsp; <kbd>Tab</kbd> indent
+      </div>
+    </aside>
+
+    <section class="pane editor-pane">
+      <div class="pane-head">
+        <span class="pane-title">Editor</span>
+        <span class="pane-sub" id="editorSub">closures.js</span>
+        <select class="mini-select mobile-only" id="snipSelect" aria-label="Choose snippet"></select>
+        <span class="spacer"></span>
+        <button class="icon-btn" id="formatBtn" title="Re-indent the whole file">⇥</button>
+      </div>
+      <div class="editor-shell">
+        <div class="gutter"><div class="gutter-inner" id="gutter"></div></div>
+        <div class="code-wrap">
+          <pre class="hl" aria-hidden="true"><code class="hl-inner" id="hl"></code></pre>
+          <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-label="JavaScript editor"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize console panel"></div>
+
+    <section class="pane console-pane" id="consolePane">
+      <div class="pane-head">
+        <span class="pane-title">Console</span>
+        <span class="chip" id="timeChip" title="Execution time of the last run">— ms</span>
+        <span class="chip hide-sm" id="heapChip" title="V8 JS heap used by this page (Chrome only)">heap —</span>
+        <span class="spacer"></span>
+        <span class="live-dot" id="liveDot" style="display:none"></span>
+        <select class="mini-select" id="limitSel" title="Execution timeout" aria-label="Execution timeout">
+          <option value="1000">1s</option>
+          <option value="5000" selected>5s</option>
+          <option value="15000">15s</option>
+        </select>
+      </div>
+      <div class="console-body" id="consoleBody" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer class="statusbar">
+    <span class="sb" id="sbSnippet">closures.js</span>
+    <span class="dot-sep">·</span>
+    <span class="sb">Ln <span class="v" id="sbLine">1</span>, Col <span class="v" id="sbCol">1</span></span>
+    <span class="dot-sep hide-sm">·</span>
+    <span class="sb hide-sm"><span class="v" id="sbLines">1</span> lines</span>
+    <span class="dot-sep hide-sm">·</span>
+    <span class="sb hide-sm" id="sbSaved">saved</span>
+    <span class="grow"></span>
+    <span class="sb hide-sm" id="sbEngine">—</span>
+    <span class="dot-sep hide-sm">·</span>
+    <span class="sb">last run <span class="v" id="sbRun">—</span></span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =========================================================
+     Snippet library
+     ========================================================= */
+  var SNIPPETS = [
+    {
+      id: "closures",
+      title: "Closures & private state",
+      tag: "scope",
+      group: "Foundations",
+      file: "closures.js",
+      blurb: "Functions carry their scope with them — and var-vs-let in loops.",
+      code: [
+        "// A closure is a function plus the scope it was created in.",
+        "function makeCounter(start = 0) {",
+        "  let count = start;                 // private: nothing outside can touch it",
+        "  return {",
+        "    inc: () => ++count,",
+        "    dec: () => --count,",
+        "    get value() { return count; }",
+        "  };",
+        "}",
+        "",
+        "const counter = makeCounter(10);",
+        "counter.inc();",
+        "counter.inc();",
+        "counter.dec();",
+        "",
+        "console.log('value is', counter.value);",
+        "console.log('count leaked to global?', typeof count);",
+        "",
+        "// The classic gotcha: var shares one binding, let makes a new one per iteration.",
+        "const withVar = [];",
+        "for (var i = 0; i < 3; i++) withVar.push(() => i);",
+        "",
+        "const withLet = [];",
+        "for (let j = 0; j < 3; j++) withLet.push(() => j);",
+        "",
+        "console.log('var →', withVar.map(fn => fn()));  // [3, 3, 3]",
+        "console.log('let →', withLet.map(fn => fn()));  // [0, 1, 2]",
+        "",
+        "// The value of the last expression is echoed as the result.",
+        "({ closedOver: counter.value, calls: counter.value + 0 })"
+      ].join("\n")
+    },
+    {
+      id: "promises",
+      title: "Promises & combinators",
+      tag: "async",
+      group: "Async",
+      file: "promises.js",
+      blurb: "all / allSettled / race / any, and how rejections behave.",
+      code: [
+        "const sleep = (ms, value) => new Promise(resolve => setTimeout(() => resolve(value), ms));",
+        "const fail = (ms, msg) => new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms));",
+        "",
+        "// Promise.all — fails fast on the first rejection",
+        "const all = await Promise.all([sleep(40, 'a'), sleep(10, 'b'), sleep(25, 'c')]);",
+        "console.log('all →', all);",
+        "",
+        "// Promise.allSettled — always resolves with a status per promise",
+        "const settled = await Promise.allSettled([sleep(15, 'ok'), fail(20, 'boom')]);",
+        "console.log('allSettled →', settled);",
+        "",
+        "// Promise.race — first to SETTLE wins (resolve or reject)",
+        "const race = await Promise.race([sleep(30, 'slow'), sleep(5, 'fast')]);",
+        "console.log('race →', race);",
+        "",
+        "// Promise.any — first to FULFIL wins, rejections are ignored",
+        "const any = await Promise.any([fail(5, 'nope'), sleep(20, 'yes')]);",
+        "console.log('any →', any);",
+        "",
+        "// Chaining returns a new promise each time",
+        "const chained = await Promise.resolve(2)",
+        "  .then(n => n * 3)",
+        "  .then(n => n + 4)",
+        "  .catch(err => -1)",
+        "  .finally(() => console.log('finally runs either way'));",
+        "",
+        "chained;"
+      ].join("\n")
+    },
+    {
+      id: "async-await",
+      title: "async / await & errors",
+      tag: "async",
+      group: "Async",
+      file: "async-await.js",
+      blurb: "Sequential vs parallel awaits, timing, try/catch, and top-level await.",
+      code: [
+        "const sleep = ms => new Promise(r => setTimeout(r, ms));",
+        "",
+        "async function fetchUser(id) {",
+        "  await sleep(60);",
+        "  if (id < 0) throw new Error('user not found: ' + id);",
+        "  return { id, name: 'user-' + id };",
+        "}",
+        "",
+        "// Sequential: each await blocks the next one",
+        "let t = performance.now();",
+        "const a = await fetchUser(1);",
+        "const b = await fetchUser(2);",
+        "console.log('sequential', (performance.now() - t).toFixed(0) + 'ms', [a, b]);",
+        "",
+        "// Parallel: start everything first, then await",
+        "t = performance.now();",
+        "const [c, d, e] = await Promise.all([fetchUser(3), fetchUser(4), fetchUser(5)]);",
+        "console.log('parallel  ', (performance.now() - t).toFixed(0) + 'ms', [c, d, e]);",
+        "",
+        "// Errors: try/catch around await works exactly like sync code",
+        "try {",
+        "  await fetchUser(-1);",
+        "} catch (err) {",
+        "  console.warn('caught:', err.message);",
+        "}",
+        "",
+        "// An async function always returns a promise, even when it returns a value",
+        "const result = fetchUser(9);",
+        "console.log('returns a promise →', result);",
+        "console.log('awaited value →', await result);",
+        "",
+        "await result;"
+      ].join("\n")
+    },
+    {
+      id: "arrays",
+      title: "Array methods",
+      tag: "data",
+      group: "Data",
+      file: "arrays.js",
+      blurb: "map / filter / reduce / flatMap / sort / find — plus a reduce tally.",
+      code: [
+        "const people = [",
+        "  { name: 'Ada',    age: 36, langs: ['js', 'c'] },",
+        "  { name: 'Grace',  age: 45, langs: ['cobol'] },",
+        "  { name: 'Linus',  age: 54, langs: ['c'] },",
+        "  { name: 'Margaret', age: 33, langs: ['js', 'fortran'] }",
+        "];",
+        "",
+        "console.log('names   →', people.map(p => p.name));",
+        "console.log('over 40 →', people.filter(p => p.age > 40).map(p => p.name));",
+        "",
+        "// reduce: one value out of many",
+        "const avgAge = people.reduce((sum, p) => sum + p.age, 0) / people.length;",
+        "console.log('avg age →', avgAge.toFixed(1));",
+        "",
+        "// flatMap: map + flatten one level",
+        "const langs = people.flatMap(p => p.langs);",
+        "console.log('langs   →', langs);",
+        "",
+        "// A tally without a library",
+        "const tally = langs.reduce((acc, lang) => {",
+        "  acc[lang] = (acc[lang] || 0) + 1;",
+        "  return acc;",
+        "}, {});",
+        "console.log('tally   →', tally);",
+        "",
+        "// sort mutates, so copy first. Comparator is required for numbers.",
+        "const nums = [10, 9, 100, 1];",
+        "console.log('default sort →', [...nums].sort());",
+        "console.log('numeric sort →', [...nums].sort((x, y) => x - y));",
+        "",
+        "// find vs filter: first match vs all matches",
+        "console.log('find    →', people.find(p => p.langs.includes('c')).name);",
+        "",
+        "// every / some / includes",
+        "console.log('all adults?', people.every(p => p.age >= 18), '| any under 35?', people.some(p => p.age < 35));",
+        "",
+        "people.slice().sort((x, y) => x.age - y.age).map(p => p.name + ':' + p.age);"
+      ].join("\n")
+    },
+    {
+      id: "event-loop",
+      title: "Event loop: micro vs macro",
+      tag: "runtime",
+      group: "Runtime",
+      file: "event-loop.js",
+      blurb: "Predict the order: sync → microtasks → macrotasks. Watch it drain.",
+      code: [
+        "// Predict the order before pressing Run.",
+        "console.log('1 · sync start');",
+        "",
+        "setTimeout(() => console.log('5 · setTimeout (macrotask)'), 0);",
+        "",
+        "queueMicrotask(() => console.log('3 · queueMicrotask (microtask)'));",
+        "",
+        "Promise.resolve().then(() => {",
+        "  console.log('4 · promise.then (microtask)');",
+        "  // A macrotask queued from a microtask runs after the whole microtask queue drains",
+        "  setTimeout(() => console.log('7 · setTimeout from a microtask'), 0);",
+        "});",
+        "",
+        "(async () => {",
+        "  console.log('2 · async body runs synchronously until the first await');",
+        "  await null;",
+        "  console.log('6 · continuation after await (microtask)');",
+        "})();",
+        "",
+        "console.log('1b · sync end');",
+        "",
+        "// Rule: the current script always finishes first, then ALL microtasks drain,",
+        "// then one macrotask runs (and drains the microtask queue again after it).",
+        "'done — the last two lines arrive after this run finishes';"
+      ].join("\n")
+    },
+    {
+      id: "generators",
+      title: "Generators & iteration",
+      tag: "syntax",
+      group: "Language",
+      file: "generators.js",
+      blurb: "Lazy sequences, two-way yield, and async iteration with for await.",
+      code: [
+        "// A generator is a resumable function: nothing runs until you ask for a value.",
+        "function* idMaker(prefix = 'id') {",
+        "  let n = 0;",
+        "  while (true) {",
+        "    const next = yield prefix + '-' + (++n);   // value out, value in",
+        "    if (next === 'stop') return 'stopped at ' + n;",
+        "  }",
+        "}",
+        "",
+        "const ids = idMaker('user');",
+        "console.log(ids.next().value);",
+        "console.log(ids.next().value);",
+        "console.log(ids.next('stop'));   // { value: 'stopped at 2', done: true }",
+        "",
+        "// Generators are iterable — for...of works, and it is lazy",
+        "function* take(iterable, n) {",
+        "  let i = 0;",
+        "  for (const v of iterable) {",
+        "    if (i++ >= n) return;",
+        "    yield v;",
+        "  }",
+        "}",
+        "",
+        "function* naturals() {",
+        "  let i = 1;",
+        "  while (true) yield i++;",
+        "}",
+        "",
+        "console.log('first 6 →', [...take(naturals(), 6)]);",
+        "",
+        "// async generators + for await...of",
+        "async function* ticks(ms) {",
+        "  for (let i = 1; i <= 3; i++) {",
+        "    await new Promise(r => setTimeout(r, ms));",
+        "    yield 'tick ' + i;",
+        "  }",
+        "}",
+        "",
+        "for await (const t of ticks(15)) console.log(t);",
+        "",
+        "[...take(naturals(), 10)];"
+      ].join("\n")
+    },
+    {
+      id: "classes",
+      title: "Classes, getters, private fields",
+      tag: "syntax",
+      group: "Language",
+      file: "classes.js",
+      blurb: "Real #private state, static members, subclassing and instanceof.",
+      code: [
+        "class Shape {",
+        "  #secret = 'only this class can read me';",
+        "",
+        "  constructor(name) {",
+        "    this.name = name;",
+        "  }",
+        "",
+        "  get area() { return 0; }",
+        "",
+        "  get label() {",
+        "    return this.name + ' (' + this.area.toFixed(2) + ' units²)';",
+        "  }",
+        "",
+        "  static create(kind, ...args) {",
+        "    const map = { circle: Circle, rect: Rect };",
+        "    return new map[kind](...args);",
+        "  }",
+        "",
+        "  reveal() { return this.#secret; }",
+        "",
+        "  toString() { return this.label; }",
+        "}",
+        "",
+        "class Circle extends Shape {",
+        "  constructor(r) {",
+        "    super('circle');",
+        "    this.r = r;",
+        "  }",
+        "  get area() { return Math.PI * this.r ** 2; }",
+        "}",
+        "",
+        "class Rect extends Shape {",
+        "  constructor(w, h) {",
+        "    super('rect');",
+        "    this.w = w;",
+        "    this.h = h;",
+        "  }",
+        "  get area() { return this.w * this.h; }",
+        "}",
+        "",
+        "const shapes = [Shape.create('circle', 2), Shape.create('rect', 3, 4)];",
+        "shapes.forEach(s => console.log(String(s)));",
+        "",
+        "console.log('total area →', shapes.reduce((sum, s) => sum + s.area, 0).toFixed(2));",
+        "console.log('instanceof Shape →', shapes.every(s => s instanceof Shape));",
+        "console.log('private read →', shapes[0].reveal());",
+        "console.log('private from outside →', shapes[0].secret);",
+        "",
+        "shapes.map(s => s.label);"
+      ].join("\n")
+    },
+    {
+      id: "gotchas",
+      title: "Gotchas: sort, ==, NaN",
+      tag: "pitfall",
+      group: "Pitfalls",
+      file: "gotchas.js",
+      blurb: "The sharp edges: numeric sort, loose equality, NaN, float math.",
+      code: [
+        "// 1. sort() compares strings by default — numbers come out wrong",
+        "console.log([10, 9, 100, 1].sort());",
+        "console.log([10, 9, 100, 1].sort((a, b) => a - b));",
+        "",
+        "// 2. == coerces, === does not",
+        "console.log('\\'5\\' == 5  →', '5' == 5);",
+        "console.log('\\'5\\' === 5 →', '5' === 5);",
+        "console.log('[] == false →', [] == false);",
+        "",
+        "// 3. NaN is not equal to itself — use Number.isNaN",
+        "console.log('NaN === NaN →', NaN === NaN, '| Number.isNaN →', Number.isNaN(NaN));",
+        "",
+        "// 4. Floating point is binary, not decimal",
+        "console.log('0.1 + 0.2 →', 0.1 + 0.2, '| equals 0.3?', 0.1 + 0.2 === 0.3);",
+        "",
+        "// 5. typeof null is 'object' (a bug kept for compatibility)",
+        "console.log('typeof null →', typeof null, '| null check →', typeof null === 'object' && null !== null);",
+        "",
+        "// 6. const freezes the binding, not the contents",
+        "const list = [1, 2];",
+        "list.push(3);",
+        "console.log('mutated const →', list);",
+        "",
+        "// 7. String sort is Unicode order, uppercase first",
+        "console.log(['banana', 'Apple', 'cherry'].sort());",
+        "console.log(['banana', 'Apple', 'cherry'].sort((a, b) => a.localeCompare(b)));",
+        "",
+        "// 8. Object keys are always strings",
+        "const obj = {};",
+        "obj[1] = 'one';",
+        "obj['1'] = 'also one';",
+        "console.log('keys →', Object.keys(obj), '| values →', Object.values(obj));",
+        "",
+        "({ sorted: [10, 9, 100, 1].sort((a, b) => a - b), strict: '5' === 5 })"
+      ].join("\n")
+    }
+  ];
+
+  /* =========================================================
+     Small helpers
+     ========================================================= */
+  var $ = function (id) { return document.getElementById(id); };
+  var store = {
+    get: function (k, fallback) {
+      try {
+        var v = window.localStorage.getItem(k);
+        return v == null ? fallback : JSON.parse(v);
+      } catch (e) { return fallback; }
+    },
+    set: function (k, v) {
+      try { window.localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ }
+    }
+  };
+  var KEY = "js-playground.v1";
+
+  var esc = function (s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+
+  /* =========================================================
+     Runner: worker source
+     ========================================================= */
+  var WORKER_SRC = String.raw`
+'use strict';
+
+var AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+var clock = function () { return (self.performance && self.performance.now) ? self.performance.now() : Date.now(); };
+var BT = String.fromCharCode(96);   /* backtick, kept out of the template literal */
+var MAX_STR = 500;
+var MAX_DEPTH = 3;
+var MAX_ITEMS = 60;
+
+var counters = Object.create(null);
+var timers = Object.create(null);
+var groupIndent = 0;
+
+function post(type, data) { self.postMessage({ __pg: 1, type: type, data: data }); }
+
+function clip(s, n) {
+  s = String(s);
+  return s.length > n ? s.slice(0, n) + '… (+' + (s.length - n) + ' chars)' : s;
+}
+
+function quote(s) {
+  var out = String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t')
+    .replace(/"/g, '\\"');
+  return '"' + clip(out, MAX_STR) + '"';
+}
+
+function ctorName(v) {
+  try {
+    if (v && v.constructor && v.constructor.name) return v.constructor.name;
+  } catch (e) {}
+  return 'Object';
+}
+
+function preview(value, depth, seen) {
+  depth = depth || 0;
+  seen = seen || [];
+  var t = typeof value;
+
+  if (value === null) return 'null';
+  if (t === 'undefined') return 'undefined';
+  if (t === 'string') return quote(value);
+  if (t === 'number') return Object.is(value, -0) ? '-0' : String(value);
+  if (t === 'bigint') return String(value) + 'n';
+  if (t === 'boolean') return String(value);
+  if (t === 'symbol') { try { return value.toString(); } catch (e) { return 'Symbol()'; } }
+
+  if (t === 'function') {
+    var src = '';
+    try { src = Function.prototype.toString.call(value); } catch (e) {}
+    var isClass = /^class[\s{]/.test(src);
+    return (isClass ? 'class ' : 'ƒ ') + (value.name || '(anonymous)') + '()';
+  }
+
+  if (seen.indexOf(value) !== -1) return '[Circular]';
+
+  if (value instanceof Error) {
+    var line = value.name + ': ' + value.message;
+    if (depth === 0 && value.stack) {
+      var frames = String(value.stack).split('\n').slice(1)
+        .map(function (l) { return l.trim(); })
+        .filter(function (l) { return l && l.indexOf('eval at') === -1 && l.indexOf('AsyncFunction') === -1; })
+        .slice(0, 2);
+      if (frames.length) line += '\n' + frames.join('\n');
+    }
+    return line;
+  }
+  if (value instanceof Date) return isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString();
+  if (value instanceof RegExp) return String(value);
+  if (typeof Promise !== 'undefined' && value instanceof Promise) return 'Promise {<pending>}';
+
+  seen = seen.concat([value]);
+  var tag = Object.prototype.toString.call(value).slice(8, -1);
+
+  if (Array.isArray(value)) {
+    var parts = value.slice(0, MAX_ITEMS).map(function (v) { return preview(v, depth + 1, seen); });
+    var rest = value.length > MAX_ITEMS ? ', … +' + (value.length - MAX_ITEMS) + ' more' : '';
+    return '[' + parts.join(', ') + rest + ']';
+  }
+
+  if (depth > MAX_DEPTH) return '[' + tag + ']';
+
+  if (typeof Map !== 'undefined' && value instanceof Map) {
+    var mp = [];
+    var mi = 0;
+    value.forEach(function (v, k) {
+      if (mi++ >= MAX_ITEMS) return;
+      mp.push(preview(k, depth + 1, seen) + ' => ' + preview(v, depth + 1, seen));
+    });
+    return 'Map(' + value.size + ') {' + mp.join(', ') + '}';
+  }
+  if (typeof Set !== 'undefined' && value instanceof Set) {
+    var sp = [];
+    var si = 0;
+    value.forEach(function (v) {
+      if (si++ >= MAX_ITEMS) return;
+      sp.push(preview(v, depth + 1, seen));
+    });
+    return 'Set(' + value.size + ') {' + sp.join(', ') + '}';
+  }
+  if (ArrayBuffer.isView(value) && !(value instanceof DataView)) {
+    return tag + '(' + value.length + ') [' + Array.prototype.slice.call(value, 0, 24).join(', ') + ']';
+  }
+
+  var keys = [];
+  try { keys = Object.keys(value); } catch (e) { return '[' + tag + ']'; }
+  if (!keys.length) {
+    var name = ctorName(value);
+    return name === 'Object' ? '{}' : name + ' {}';
+  }
+  var body = keys.slice(0, MAX_ITEMS).map(function (k) {
+    var v;
+    try { v = value[k]; } catch (e) { v = '[getter threw]'; }
+    return k + ': ' + preview(v, depth + 1, seen);
+  });
+  var more = keys.length > MAX_ITEMS ? ', … +' + (keys.length - MAX_ITEMS) + ' more' : '';
+  var ctor = ctorName(value);
+  var prefix = (ctor === 'Object' || ctor === 'Array') ? '' : ctor + ' ';
+  return prefix + '{' + body.join(', ') + more + '}';
+}
+
+function table(value) {
+  var rows = Array.isArray(value) ? value.map(function (r) { return r; }) :
+    (value && typeof value === 'object' ? Object.keys(value).map(function (k) {
+      var row = { '(index)': k };
+      if (value[k] && typeof value[k] === 'object') {
+        Object.keys(value[k]).forEach(function (ck) { row[ck] = value[k][ck]; });
+      } else { row.value = value[k]; }
+      return row;
+    }) : []);
+
+  if (!rows.length || rows.some(function (r) { return r === null || typeof r !== 'object'; })) {
+    return preview(value, 0, []);
+  }
+  var cols = [];
+  rows.forEach(function (r) {
+    Object.keys(r).forEach(function (k) { if (cols.indexOf(k) === -1) cols.push(k); });
+  });
+  if (!cols.length) return preview(value, 0, []);
+  var cell = function (v) {
+    if (v === undefined) return 'undefined';
+    if (typeof v === 'string') return clip(v, 28);
+    return clip(preview(v, 1, []), 28);
+  };
+  var grid = rows.map(function (r) { return cols.map(function (c) { return cell(r[c]); }); });
+  var widths = cols.map(function (c, i) {
+    var w = c.length;
+    grid.forEach(function (row) { if (row[i].length > w) w = row[i].length; });
+    return w;
+  });
+  var pad = function (s, w) { while (s.length < w) s += ' '; return s; };
+  var line = function (chars, join) {
+    return chars.map(function (c, i) { return new Array(widths[i] + 3).join(c); }).join(join);
+  };
+  var out = ['┌' + line(['─'], '┬') + '┐'];
+  out.push('│' + cols.map(function (c, i) { return ' ' + pad(c, widths[i]) + ' '; }).join('│') + '│');
+  out.push('├' + line(['─'], '┼') + '┤');
+  grid.forEach(function (row) {
+    out.push('│' + row.map(function (v, i) { return ' ' + pad(v, widths[i]) + ' '; }).join('│') + '│');
+  });
+  out.push('└' + line(['─'], '┴') + '┘');
+  return out.join('\n');
+}
+
+function emit(level, args, extra) {
+  var data = {
+    level: level,
+    parts: Array.prototype.map.call(args, function (a) { return preview(a, 0, []); }),
+    indent: groupIndent
+  };
+  if (extra) { for (var k in extra) data[k] = extra[k]; }
+  post('log', data);
+}
+
+var fake = {
+  log: function () { emit('log', arguments); },
+  info: function () { emit('info', arguments); },
+  debug: function () { emit('debug', arguments); },
+  warn: function () { emit('warn', arguments); },
+  error: function () { emit('error', arguments); },
+  dir: function (v) { emit('info', [v]); },
+  table: function (v) { emit('table', [table(v)]); },
+  trace: function () {
+    var e = new Error(arguments.length ? Array.prototype.join.call(arguments, ' ') : 'Trace');
+    emit('info', [e.stack || e.message]);
+  },
+  assert: function (cond) {
+    if (cond) return;
+    var rest = Array.prototype.slice.call(arguments, 1);
+    emit('error', ['Assertion failed'].concat(rest.length ? [':'].concat(rest) : []));
+  },
+  count: function (label) {
+    var key = label === undefined ? 'default' : String(label);
+    counters[key] = (counters[key] || 0) + 1;
+    emit('info', [key + ': ' + counters[key]]);
+  },
+  countReset: function (label) {
+    delete counters[label === undefined ? 'default' : String(label)];
+  },
+  group: function () { emit('log', arguments); groupIndent++; },
+  groupCollapsed: function () { emit('log', arguments); groupIndent++; },
+  groupEnd: function () { if (groupIndent > 0) groupIndent--; },
+  time: function (label) { timers[label === undefined ? 'default' : String(label)] = clock(); },
+  timeEnd: function (label) {
+    var key = label === undefined ? 'default' : String(label);
+    if (timers[key] === undefined) { emit('warn', [key + ': no such timer']); return; }
+    emit('info', [key + ': ' + (clock() - timers[key]).toFixed(3) + ' ms']);
+    delete timers[key];
+  },
+  clear: function () { post('clear', {}); }
+};
+
+function installConsole() {
+  var c = {};
+  Object.keys(fake).forEach(function (k) { c[k] = fake[k]; });
+  try {
+    self.console = c;
+  } catch (e) {
+    try { Object.defineProperty(self, 'console', { value: c, configurable: true, writable: true }); } catch (e2) {}
+  }
+}
+
+/* ---- top-level completion value -------------------------------------
+   Runs the snippet as an async function body (so 'await' and 'return'
+   both work at the top level) and additionally returns the value of a
+   trailing bare expression, the way devtools echoes the last value.  */
+
+function scanTopLevel(code) {
+  var depth = 0, i = 0, n = code.length, ends = [];
+  while (i < n) {
+    var c = code[i];
+    if (c === '/' && code[i + 1] === '/') {
+      var nl = code.indexOf('\n', i);
+      i = nl === -1 ? n : nl;
+      continue;
+    }
+    if (c === '/' && code[i + 1] === '*') {
+      var endc = code.indexOf('*/', i + 2);
+      i = endc === -1 ? n : endc + 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === BT) {
+      var q = c;
+      i++;
+      while (i < n) {
+        if (code[i] === '\\') { i += 2; continue; }
+        if (code[i] === q) { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    if (c === '(' || c === '[' || c === '{') { depth++; i++; continue; }
+    if (c === ')' || c === ']' || c === '}') {
+      depth--;
+      if (depth === 0) ends.push(i);
+      i++;
+      continue;
+    }
+    if (c === ';' && depth === 0) ends.push(i);
+    i++;
+  }
+  if (depth !== 0) return null;
+  return ends;
+}
+
+var NO_AUTO_RETURN = /^(const|let|var|function|class|if|for|while|do|switch|try|return|throw|import|export|async\s+function|debugger)\b/;
+
+/* Cut a trailing line comment that sits outside any string/bracket. */
+function stripTrailingComment(text) {
+  var depth = 0, i = 0, n = text.length;
+  while (i < n) {
+    var c = text[i];
+    if (c === '"' || c === "'" || c === BT) {
+      var q = c; i++;
+      while (i < n) {
+        if (text[i] === '\\') { i += 2; continue; }
+        if (text[i] === q) { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') depth--;
+    else if (c === '/' && text[i + 1] === '/' && depth === 0) return text.slice(0, i).replace(/\s+$/, '');
+    i++;
+  }
+  return text;
+}
+
+/* Drop leading // and block comments so the tail starts at real code. */
+function stripLeadingComments(text) {
+  var s = text;
+  for (;;) {
+    s = s.replace(/^\s+/, '');
+    if (s.slice(0, 2) === '//') {
+      var nl = s.indexOf('\n');
+      if (nl === -1) return '';
+      s = s.slice(nl + 1);
+      continue;
+    }
+    if (s.slice(0, 2) === '/*') {
+      var endc = s.indexOf('*/', 2);
+      if (endc === -1) return '';
+      s = s.slice(endc + 2);
+      continue;
+    }
+    return s;
+  }
+}
+
+function injectTrailingReturn(code) {
+  var src = code.replace(/\s+$/, '');
+  if (!src) return null;
+  if (src.charAt(src.length - 1) === ';') src = src.slice(0, -1).replace(/\s+$/, '');
+  if (!src) return null;
+
+  var ends = scanTopLevel(src);
+  if (ends === null) return null;
+
+  /* Walk backwards over top-level statement ends until a bare expression tail appears. */
+  var candidates = ends.slice().reverse();
+  candidates.push(-1);
+  for (var k = 0; k < candidates.length; k++) {
+    var b = candidates[k];
+    var tail = stripTrailingComment(stripLeadingComments(src.slice(b + 1).trim()));
+    if (!tail) continue;
+    if (NO_AUTO_RETURN.test(tail)) return null;
+    if (/^[{(]/.test(tail) && !/^\(\s*\{/.test(tail)) return null;
+    if (/=>\s*$/.test(tail)) return null;
+    if (/[\n;]\s*$/.test(tail)) return null;
+    /* A member/call continuation belongs to the previous statement, not a new one. */
+    if (/^(\.|\?\.)/.test(tail)) continue;
+    if (/^[([\u0060]/.test(tail) && b >= 0 && /[\w$)\]}]/.test(src.charAt(b))) continue;
+    var head = b >= 0 ? src.slice(0, b + 1) : '';
+    return head + (head ? '\n' : '') + 'return (' + tail + ');';
+  }
+  return null;
+}
+
+function compile(code) {
+  var transformed = injectTrailingReturn(code);
+  if (transformed) {
+    try {
+      return { fn: new AsyncFunction(transformed), auto: true };
+    } catch (err) {
+      if (!(err && err.name === 'SyntaxError')) throw err;
+      /* fall through: the guess was wrong, run the code as written */
+    }
+  }
+  return { fn: new AsyncFunction(code), auto: false };
+}
+
+/* ---- error reporting ---- */
+function describeError(err, totalLines) {
+  var isError = (err && typeof err === 'object' && typeof err.message === 'string' && typeof err.name === 'string');
+  var name = isError ? String(err.name || 'Error') : 'Uncaught';
+  var message = isError ? String(err.message) : preview(err, 0, []);
+  var out = { name: name, message: message, stack: [], line: null, column: null };
+
+  var stack = (isError && err.stack) ? String(err.stack) : '';
+  if (!stack) return out;
+
+  var lines = stack.split('\n');
+  var frames = [];
+  for (var i = 0; i < lines.length && frames.length < 3; i++) {
+    var raw = lines[i].trim();
+    if (!raw) continue;
+    if (raw === name + ': ' + message) continue;
+
+    /* The snippet's own frames look like "<anonymous>:12:7" (browsers) or
+       "eval at <anonymous> (…), <anonymous>:12:7" (node). Scan every match on
+       the line and keep the first one that lands inside the snippet. */
+    var re = /<anonymous>:(\d+):(\d+)/g;
+    var hit = null;
+    var mm;
+    while ((mm = re.exec(raw)) !== null) {
+      var cand = parseInt(mm[1], 10) - 2;   /* AsyncFunction body starts on line 3 */
+      if (cand >= 1 && (!totalLines || cand <= totalLines)) { hit = { ln: cand, col: parseInt(mm[2], 10) }; break; }
+    }
+    if (hit) {
+      if (out.line === null) { out.line = hit.ln; out.column = hit.col; }
+      frames.push('at line ' + hit.ln + ':' + hit.col);
+      continue;
+    }
+    if (/<anonymous>:\d+:\d+/.test(raw)) continue;
+    if (raw.indexOf('eval at') !== -1) continue;
+    if (raw.indexOf('AsyncFunction') !== -1) continue;
+    if (raw.indexOf('at execute') !== -1 || raw.indexOf('at compile') !== -1) continue;
+    if (raw.indexOf('node:internal') !== -1) continue;
+    if (/^at\s/.test(raw)) frames.push(raw.replace(/^at\s+/, 'at '));
+  }
+  out.stack = frames;
+  return out;
+}
+
+/* ---- run ---- */
+var runSeq = 0;
+
+/* Browsers do not report a line for a SyntaxError thrown by the Function
+   constructor, so bisect the source to find the first line that breaks. */
+function locateSyntaxError(code) {
+  var lines = code.split('\n');
+  var ok = function (n) {
+    try { new AsyncFunction(lines.slice(0, n).join('\n')); return true; } catch (e) { return false; }
+  };
+  if (ok(lines.length)) return null;
+  var lo = 0, hi = lines.length;
+  while (lo < hi) {
+    var mid = Math.ceil((lo + hi) / 2);
+    if (ok(mid)) lo = mid; else hi = mid - 1;
+  }
+  return Math.min(lo + 1, lines.length);
+}
+
+async function execute(code) {
+  installConsole();
+  var counts = { log: 0, warn: 0, error: 0 };
+  var origEmit = emit;
+  emit = function (level, args, extra) {
+    if (level === 'warn') counts.warn++;
+    else if (level === 'error') counts.error++;
+    else counts.log++;
+    return origEmit(level, args, extra);
+  };
+
+  var started = clock();
+  var result = null;
+  var error = null;
+
+  try {
+    var compiled = compile(code);
+    var value = await compiled.fn();
+    result = { has: value !== undefined, text: preview(value, 0, []) };
+  } catch (err) {
+    error = describeError(err, code.split('\n').length);
+    if (error.name === 'SyntaxError' && error.line === null) {
+      var bad = locateSyntaxError(code);
+      if (bad) { error.line = bad; error.column = null; }
+    }
+    counts.error++;
+  }
+
+  var duration = clock() - started;
+
+  post('done', {
+    duration: duration,
+    result: result,
+    error: error,
+    counts: counts,
+    auto: false
+  });
+}
+
+self.onmessage = function (event) {
+  var msg = event.data || {};
+  if (msg.type !== 'run') return;
+  runSeq = msg.id || (runSeq + 1);
+  execute(String(msg.code || ''));
+};
+
+self.addEventListener('error', function (ev) {
+  var msg = ev && ev.message ? ev.message : 'Uncaught error';
+  post('log', { level: 'error', parts: [msg], indent: 0, late: true });
+  ev.preventDefault && ev.preventDefault();
+});
+
+self.addEventListener('unhandledrejection', function (ev) {
+  var reason = ev ? ev.reason : undefined;
+  post('log', {
+    level: 'error',
+    parts: ['Uncaught (in promise) ' + preview(reason, 0, [])],
+    indent: 0,
+    late: true
+  });
+  if (ev && ev.preventDefault) ev.preventDefault();
+});
+`;
+
+  /* =========================================================
+     DOM references
+     ========================================================= */
+  var ta = $("code");
+  var hl = $("hl");
+  var gutter = $("gutter");
+  var consoleBody = $("consoleBody");
+  var consolePane = $("consolePane");
+  var runBtn = $("runBtn");
+  var runIcon = $("runIcon");
+  var runLabel = $("runLabel");
+  var timeChip = $("timeChip");
+  var heapChip = $("heapChip");
+  var liveDot = $("liveDot");
+  var limitSel = $("limitSel");
+  var snipList = $("snipList");
+  var snipSearch = $("snipSearch");
+  var snipSelect = $("snipSelect");
+  var editorSub = $("editorSub");
+  var splitter = $("splitter");
+
+  var state = {
+    currentId: null,
+    running: false,
+    worker: null,
+    timeout: 0,
+    runCount: 0,
+    errorLine: null,
+    lastDuration: null,
+    savedAt: 0
+  };
+
+  /* =========================================================
+     Editor: highlight + gutter + scroll sync
+     ========================================================= */
+  var KEYWORDS = new Set(["const", "let", "var", "function", "return", "if", "else", "for", "while", "do",
+    "switch", "case", "break", "continue", "new", "typeof", "instanceof", "in", "of", "class", "extends",
+    "super", "this", "try", "catch", "finally", "throw", "async", "await", "yield", "delete", "void",
+    "static", "get", "set", "import", "export", "from", "default", "with", "debugger"]);
+  var LITERALS = new Set(["true", "false", "null", "undefined", "NaN", "Infinity"]);
+  var BUILTINS = new Set(["console", "Math", "JSON", "Object", "Array", "String", "Number", "Boolean",
+    "Promise", "Map", "Set", "WeakMap", "WeakSet", "Symbol", "BigInt", "Date", "RegExp", "Error",
+    "TypeError", "RangeError", "SyntaxError", "ReferenceError", "setTimeout", "setInterval",
+    "clearTimeout", "clearInterval", "queueMicrotask", "structuredClone", "fetch", "performance",
+    "globalThis", "Intl", "Proxy", "Reflect", "document", "window", "parseInt", "parseFloat",
+    "isNaN", "encodeURIComponent", "decodeURIComponent", "ArrayBuffer", "Uint8Array", "Float64Array"]);
+
+  var TOKEN_RE = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(`(?:\\[\s\S]|[^\\`])*`)|("(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*')|(\b(?:0[xX][\da-fA-F]+|0[bB][01]+|\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?)\b)|([A-Za-z_$][\w$]*)|(\s+)|([^\s])/g;
+
+  function highlight(src) {
+    var out = "<span></span>";
+    var last = 0;
+    var m;
+    TOKEN_RE.lastIndex = 0;
+    while ((m = TOKEN_RE.exec(src)) !== null) {
+      if (m.index > last) out += esc(src.slice(last, m.index));
+      var tok = m[0];
+      var cls = "";
+      if (m[1]) cls = "cm";
+      else if (m[2] || m[3]) cls = "str";
+      else if (m[4]) cls = "num";
+      else if (m[5]) {
+        if (KEYWORDS.has(tok)) cls = "kw";
+        else if (LITERALS.has(tok)) cls = "lit";
+        else if (BUILTINS.has(tok)) cls = "bi";
+        else if (src.charAt(m.index - 1) === ".") cls = "prop";
+        else {
+          var j = m.index + tok.length;
+          while (j < src.length && /\s/.test(src.charAt(j))) j++;
+          cls = src.charAt(j) === "(" ? "fn" : "";
+        }
+      } else if (m[6]) cls = "";
+      else cls = "punc";
+      out += cls ? '<span class="' + cls + '">' + esc(tok) + "</span>" : esc(tok);
+      last = m.index + tok.length;
+    }
+    if (last < src.length) out += esc(src.slice(last));
+    return out;
+  }
+
+  function lineCount() { return ta.value.split("\n").length; }
+
+  function renderGutter() {
+    var total = lineCount();
+    var cursorLine = ta.value.slice(0, ta.selectionStart).split("\n").length;
+    var html = "";
+    for (var i = 1; i <= total; i++) {
+      var cls = "ln";
+      if (i === state.errorLine) cls += " err";
+      else if (i === cursorLine) cls += " active";
+      html += '<div class="' + cls + '">' + i + "</div>";
+    }
+    gutter.innerHTML = html;
+  }
+
+  function syncScroll() {
+    var x = ta.scrollLeft;
+    var y = ta.scrollTop;
+    hl.style.transform = "translate(" + (-x) + "px," + (-y) + "px)";
+    gutter.style.transform = "translateY(" + (-y) + "px)";
+  }
+
+  function syncAll() {
+    hl.innerHTML = highlight(ta.value + "\n");
+    renderGutter();
+    syncScroll();
+    updateStatus();
+    scheduleSave();
+  }
+
+  function updateStatus() {
+    var upto = ta.value.slice(0, ta.selectionStart);
+    var lines = upto.split("\n");
+    $("sbLine").textContent = String(lines.length);
+    $("sbCol").textContent = String(lines[lines.length - 1].length + 1);
+    $("sbLines").textContent = String(lineCount());
+    var total = lineCount();
+    if (total !== state.lastLines) {
+      state.lastLines = total;
+      renderGutter();
+    }
+  }
+
+  var saveTimer = 0;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      store.set(KEY, { code: ta.value, id: state.currentId, split: consolePane.style.width || "", at: Date.now() });
+      state.savedAt = Date.now();
+      $("sbSaved").textContent = "saved " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }, 600);
+  }
+
+  /* ---- editing behaviours ---- */
+  var PAIRS = { "(": ")", "[": "]", "{": "}", '"': '"', "'": "'", "`": "`" };
+  var CLOSERS = { ")": "(", "]": "[", "}": "{", '"': '"', "'": "'", "`": "`" };
+
+  function replaceRange(start, end, text, caret) {
+    ta.focus();
+    var done = false;
+    try {
+      ta.setSelectionRange(start, end);
+      done = document.execCommand && document.execCommand("insertText", false, text);
+    } catch (e) { done = false; }
+    if (!done) {
+      ta.setRangeText(text, start, end, "end");
+    }
+    var pos = typeof caret === "number" ? caret : start + text.length;
+    ta.setSelectionRange(pos, pos);
+    syncAll();
+  }
+
+  function indentSelection(outdent) {
+    var start = ta.selectionStart;
+    var end = ta.selectionEnd;
+    var val = ta.value;
+    var blockStart = val.lastIndexOf("\n", start - 1) + 1;
+    var nextNl = val.indexOf("\n", end);
+    var blockEnd = nextNl === -1 ? val.length : nextNl;
+    var block = val.slice(blockStart, blockEnd);
+    var lines = block.split("\n");
+    var deltaFirst = 0;
+    var changed = lines.map(function (line, idx) {
+      var next;
+      if (outdent) next = line.replace(/^ {1,2}/, "");
+      else next = "  " + line;
+      if (idx === 0) deltaFirst = next.length - line.length;
+      return next;
+    });
+    if (changed.join("\n") === block) return;
+    var totalDelta = changed.join("\n").length - block.length;
+    replaceRange(blockStart, blockEnd, changed.join("\n"), start + (start === blockStart ? deltaFirst : 0));
+    ta.setSelectionRange(start + (start === blockStart ? deltaFirst : 0), end + totalDelta);
+    syncAll();
+  }
+
+  ta.addEventListener("keydown", function (e) {
+    var start = ta.selectionStart;
+    var end = ta.selectionEnd;
+    var val = ta.value;
+    var mod = e.ctrlKey || e.metaKey;
+
+    if (mod && e.key === "Enter") {
+      e.preventDefault();
+      run();
+      return;
+    }
+    if (mod && (e.key === "s" || e.key === "S")) {
+      e.preventDefault();
+      store.set(KEY, { code: ta.value, id: state.currentId, split: consolePane.style.width || "", at: Date.now() });
+      $("sbSaved").textContent = "saved just now";
+      return;
+    }
+    if (mod && e.key === "/") {
+      e.preventDefault();
+      toggleComment();
+      return;
+    }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      var multi = val.slice(start, end).indexOf("\n") !== -1;
+      if (multi) indentSelection(e.shiftKey);
+      else if (e.shiftKey) {
+        var lineStart = val.lastIndexOf("\n", start - 1) + 1;
+        var head = val.slice(lineStart, start);
+        var remove = /^ {1,2}$/.test(head) ? head.length : (/^ {2}/.test(head) ? 2 : 0);
+        if (remove) {
+          replaceRange(start - remove, start, "", start - remove);
+        }
+      } else {
+        replaceRange(start, end, "  ", start + 2);
+      }
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      var before = val.slice(0, start);
+      var lineStart = before.lastIndexOf("\n") + 1;
+      var indentMatch = /^[ \t]*/.exec(val.slice(lineStart, start));
+      var indent = indentMatch ? indentMatch[0] : "";
+      var prev = before.replace(/\s+$/, "").slice(-1);
+      var opens = prev === "{" || prev === "(" || prev === "[";
+      var nextChar = val.slice(end, end + 1);
+      var closes = nextChar === "}" || nextChar === ")" || nextChar === "]";
+
+      if (opens && closes) {
+        var text = "\n" + indent + "  " + "\n" + indent;
+        replaceRange(start, end, text, start + 1 + indent.length + 2);
+      } else if (opens) {
+        replaceRange(start, end, "\n" + indent + "  ", start + 1 + indent.length + 2);
+      } else {
+        replaceRange(start, end, "\n" + indent, start + 1 + indent.length);
+      }
+      return;
+    }
+    if (e.key === "Backspace" && start === end && start > 0) {
+      var prevChar = val.charAt(start - 1);
+      var nextChar2 = val.charAt(start);
+      if (PAIRS[prevChar] && PAIRS[prevChar] === nextChar2) {
+        e.preventDefault();
+        replaceRange(start - 1, start + 1, "", start - 1);
+        return;
+      }
+    }
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      var ch = e.key;
+      if (PAIRS[ch]) {
+        e.preventDefault();
+        if (start !== end) {
+          var selected = val.slice(start, end);
+          replaceRange(start, end, ch + selected + PAIRS[ch], start + 1 + selected.length);
+        } else {
+          var after = val.charAt(start);
+          if (/[\w$]/.test(after) && (ch === '"' || ch === "'" || ch === "`")) {
+            replaceRange(start, end, ch, start + 1);
+          } else {
+            replaceRange(start, end, ch + PAIRS[ch], start + 1);
+          }
+        }
+        return;
+      }
+      if (CLOSERS[ch] && start === end && val.charAt(start) === ch) {
+        e.preventDefault();
+        ta.setSelectionRange(start + 1, start + 1);
+        syncAll();
+        return;
+      }
+    }
+  });
+
+  function toggleComment() {
+    var start = ta.selectionStart;
+    var end = ta.selectionEnd;
+    var val = ta.value;
+    var blockStart = val.lastIndexOf("\n", start - 1) + 1;
+    var nextNl = val.indexOf("\n", end);
+    var blockEnd = nextNl === -1 ? val.length : nextNl;
+    var lines = val.slice(blockStart, blockEnd).split("\n");
+    var allCommented = lines.every(function (l) { return !l.trim() || /^\s*\/\//.test(l); });
+    var changed = lines.map(function (l) {
+      if (!l.trim()) return l;
+      if (allCommented) return l.replace(/^(\s*)\/\/ ?/, "$1");
+      return l.replace(/^(\s*)/, "$1// ");
+    });
+    var text = changed.join("\n");
+    var delta = text.length - (blockEnd - blockStart);
+    replaceRange(blockStart, blockEnd, text, Math.max(blockStart, start + (allCommented ? -3 : 3)));
+    ta.setSelectionRange(Math.max(blockStart, start + (allCommented ? -3 : 3)),
+      Math.max(blockStart, end + delta));
+    syncAll();
+  }
+
+  ta.addEventListener("input", syncAll);
+  ta.addEventListener("scroll", syncScroll);
+  ta.addEventListener("click", function () { updateStatus(); renderGutter(); });
+  ta.addEventListener("keyup", function (e) {
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].indexOf(e.key) !== -1) {
+      updateStatus();
+      renderGutter();
+    }
+  });
+
+  $("formatBtn").addEventListener("click", function () {
+    // Re-indent: 2 spaces per brace depth, keeping blank lines and strings intact.
+    var lines = ta.value.split("\n");
+    var depth = 0;
+    var out = lines.map(function (line) {
+      var trimmed = line.trim();
+      if (!trimmed) return "";
+      var lead = 0;
+      if (/^[}\])]/.test(trimmed)) lead = 1;
+      var target = Math.max(0, depth - lead);
+      var opens = (trimmed.match(/[{\[(]/g) || []).length;
+      var closes = (trimmed.match(/[}\])]/g) || []).length;
+      depth = Math.max(0, depth + opens - closes);
+      return new Array(target + 1).join("  ") + trimmed;
+    });
+    replaceRange(0, ta.value.length, out.join("\n"), 0);
+    toast("Re-indented " + out.length + " lines");
+  });
+
+  /* =========================================================
+     Console UI
+     ========================================================= */
+  var autoScroll = true;
+  consoleBody.addEventListener("scroll", function () {
+    autoScroll = consoleBody.scrollTop + consoleBody.clientHeight >= consoleBody.scrollHeight - 30;
+  });
+
+  function scrollDown() {
+    if (autoScroll) consoleBody.scrollTop = consoleBody.scrollHeight;
+  }
+
+  function clearConsole(showWelcome) {
+    consoleBody.innerHTML = "";
+    autoScroll = true;
+    state.runCount = 0;
+    if (showWelcome !== false) {
+      var box = document.createElement("div");
+      box.className = "empty";
+      box.innerHTML =
+        "<b>Sandboxed runner ready.</b>" +
+        "Every run happens in a throw-away Web Worker, so an infinite loop cannot freeze this page.<br /><br />" +
+        "Press <code>Ctrl</code> + <code>Enter</code> to run · <code>console.log()</code> prints here.";
+      consoleBody.appendChild(box);
+    }
+    timeChip.textContent = "— ms";
+    timeChip.className = "chip";
+  }
+
+  function clearEmpty() {
+    var empty = consoleBody.querySelector(".empty");
+    if (empty) empty.remove();
+  }
+
+  function addEntry(level, text, opts) {
+    clearEmpty();
+    opts = opts || {};
+    var row = document.createElement("div");
+    row.className = "entry " + level;
+    var marker = document.createElement("span");
+    marker.className = "marker";
+    marker.textContent = level === "error" ? "✕" : level === "warn" ? "!" : level === "result" ? "⟵" : level === "info" ? "i" : "›";
+    var body = document.createElement("span");
+    body.className = "body";
+    if (opts.indent) body.style.paddingLeft = (opts.indent * 13) + "px";
+    if (opts.late) {
+      var tag = document.createElement("span");
+      tag.className = "late-tag";
+      tag.textContent = "async";
+      body.appendChild(tag);
+    }
+    body.appendChild(document.createTextNode(text));
+    if (opts.stack && opts.stack.length) {
+      var st = document.createElement("span");
+      st.className = "stack";
+      st.textContent = opts.stack.join("\n");
+      body.appendChild(st);
+    }
+    row.appendChild(marker);
+    row.appendChild(body);
+    consoleBody.appendChild(row);
+    scrollDown();
+    return row;
+  }
+
+  function addRunHead(n) {
+    clearEmpty();
+    var head = document.createElement("div");
+    head.className = "run-head";
+    head.innerHTML = "<span>run <span class='n'>#" + n + "</span></span>";
+    consoleBody.appendChild(head);
+    autoScroll = true;
+    scrollDown();
+  }
+
+  function addSummary(data) {
+    var s = document.createElement("div");
+    s.className = "summary";
+    var dot = document.createElement("span");
+    dot.className = data.error ? "bad" : "ok";
+    var bits = [];
+    bits.push("<b>" + data.duration.toFixed(1) + " ms</b>");
+    if (data.counts) {
+      bits.push(data.counts.log + " log" + (data.counts.log === 1 ? "" : "s"));
+      if (data.counts.warn) bits.push(data.counts.warn + " warning" + (data.counts.warn === 1 ? "" : "s"));
+      if (data.counts.error) bits.push(data.counts.error + " error" + (data.counts.error === 1 ? "" : "s"));
+    }
+    s.appendChild(dot);
+    s.insertAdjacentHTML("beforeend", "<span>" + bits.join(" <span class='sep'>·</span> ") + "</span>");
+    consoleBody.appendChild(s);
+    scrollDown();
+  }
+
+  function addError(err) {
+    var title = err.name + ": " + err.message;
+    var stack = [];
+    if (err.line) stack.push("at line " + err.line + (err.column ? ":" + err.column : "") + " of your snippet");
+    if (err.stack && err.stack.length) {
+      err.stack.slice(0, 3).forEach(function (f) { if (!/^at line /.test(f)) stack.push(f); });
+    }
+    addEntry("error", title, { stack: stack });
+  }
+
+  function addResult(text, kind) {
+    var row = addEntry("result", "", {});
+    var body = row.querySelector(".body");
+    var kindEl = document.createElement("span");
+    kindEl.className = "kind";
+    kindEl.textContent = kind || "value";
+    body.appendChild(kindEl);
+    body.appendChild(document.createTextNode(text));
+    scrollDown();
+  }
+
+  function toast(msg) {
+    var el = document.createElement("div");
+    el.textContent = msg;
+    el.style.cssText = "position:fixed;left:50%;bottom:44px;transform:translateX(-50%);padding:7px 13px;" +
+      "border-radius:8px;background:#1b2331;border:1px solid #2b3547;color:#c9d3e2;font:11.5px var(--mono);" +
+      "z-index:99;pointer-events:none;opacity:0;transition:opacity .18s";
+    document.body.appendChild(el);
+    requestAnimationFrame(function () { el.style.opacity = "1"; });
+    setTimeout(function () {
+      el.style.opacity = "0";
+      setTimeout(function () { el.remove(); }, 220);
+    }, 1300);
+  }
+
+  /* =========================================================
+     Runner
+     ========================================================= */
+  var workerUrl = null;
+  function getWorkerUrl() {
+    if (!workerUrl) {
+      workerUrl = URL.createObjectURL(new Blob([WORKER_SRC], { type: "text/javascript" }));
+    }
+    return workerUrl;
+  }
+
+  function setRunning(on) {
+    state.running = on;
+    runBtn.classList.toggle("stop", on);
+    runIcon.textContent = on ? "■" : "▶";
+    runLabel.textContent = on ? "Stop" : "Run";
+    liveDot.style.display = on ? "inline-block" : "none";
+  }
+
+  function stopRun(silent) {
+    if (state.worker) {
+      try { state.worker.terminate(); } catch (e) { /* ignore */ }
+      state.worker = null;
+    }
+    clearTimeout(state.timeout);
+    if (!silent) {
+      addEntry("error", "Execution stopped.");
+      setRunning(false);
+    }
+    liveDot.style.display = "none";
+  }
+
+  function execTimeout() {
+    var v = parseInt(limitSel.value, 10);
+    return isNaN(v) ? 5000 : v;
+  }
+
+  function run() {
+    if (state.running) { stopRun(); return; }
+    var code = ta.value;
+    if (!code.trim()) { toast("Nothing to run"); return; }
+
+    state.runCount++;
+    var runId = state.runCount;
+    setRunning(true);
+    state.errorLine = null;
+    renderGutter();
+
+    var body = consoleBody;
+    addRunHead(runId);
+
+    var startedWall = performance.now();
+    var finished = false;
+    var worker;
+    try {
+      worker = new Worker(getWorkerUrl());
+    } catch (err) {
+      addEntry("error", "Could not start the sandbox worker: " + err.message);
+      setRunning(false);
+      return;
+    }
+    state.worker = worker;
+
+    var limit = execTimeout();
+    state.timeout = setTimeout(function () {
+      if (finished) return;
+      finished = true;
+      try { worker.terminate(); } catch (e) { /* ignore */ }
+      state.worker = null;
+      addEntry("error", "Execution timed out after " + (limit / 1000) + "s — the worker was terminated (infinite loop?).");
+      addSummary({ duration: performance.now() - startedWall, counts: { log: 0, warn: 0, error: 1 }, error: true });
+      timeChip.textContent = "timeout";
+      timeChip.className = "chip bad";
+      setRunning(false);
+    }, limit);
+
+    worker.onmessage = function (event) {
+      var msg = event.data || {};
+      if (!msg.__pg) return;
+
+      if (msg.type === "log") {
+        var d = msg.data;
+        addEntry(d.level || "log", d.parts && d.parts.length ? d.parts.join(" ") : " ", { indent: d.indent, late: d.late });
+        return;
+      }
+      if (msg.type === "clear") {
+        clearConsole(false);
+        return;
+      }
+      if (msg.type === "done") {
+        if (finished) return;
+        finished = true;
+        clearTimeout(state.timeout);
+        var data = msg.data;
+        addSummary(data);
+        if (data.error) {
+          addError(data.error);
+          state.errorLine = data.error.line || null;
+          renderGutter();
+          timeChip.textContent = data.duration.toFixed(1) + " ms";
+          timeChip.className = "chip bad";
+        } else {
+          if (data.result && data.result.has) addResult(data.result.text, "return value");
+          timeChip.textContent = data.duration.toFixed(1) + " ms";
+          timeChip.className = "chip now";
+        }
+        state.lastDuration = data.duration;
+        $("sbRun").textContent = data.duration.toFixed(1) + " ms";
+        refreshHeap();
+        setRunning(false);
+        // Keep the worker alive briefly so late async logs (timers, promises) still land.
+        var w = worker;
+        setTimeout(function () {
+          try { w.terminate(); } catch (e) { /* ignore */ }
+          if (state.worker === w) state.worker = null;
+        }, 1200);
+      }
+    };
+
+    worker.onerror = function (event) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(state.timeout);
+      var msg = (event && event.message) ? event.message : "Worker crashed";
+      addEntry("error", msg, {});
+      addSummary({ duration: performance.now() - startedWall, counts: { log: 0, warn: 0, error: 1 }, error: true });
+      setRunning(false);
+    };
+
+    worker.postMessage({ type: "run", id: runId, code: code });
+  }
+
+  runBtn.addEventListener("click", run);
+
+  document.addEventListener("keydown", function (e) {
+    var mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key === "Enter") {
+      e.preventDefault();
+      run();
+    } else if (mod && (e.key === "l" || e.key === "L")) {
+      e.preventDefault();
+      clearConsole(true);
+    }
+  });
+
+  $("clearBtn").addEventListener("click", function () { clearConsole(true); });
+
+  /* =========================================================
+     Environment info
+     ========================================================= */
+  function loadHeap() {
+    var m = performance && performance.memory;
+    if (!m) return null;
+    return { used: m.usedJSHeapSize, total: m.totalJSHeapSize, limit: m.jsHeapSizeLimit };
+  }
+
+  function mb(bytes) { return (bytes / 1048576).toFixed(1) + " MB"; }
+
+  function engineInfo() {
+    var ua = navigator.userAgent || "";
+    var m;
+    if ((m = /Firefox\/([\d.]+)/.exec(ua))) return { engine: "SpiderMonkey", browser: "Firefox", version: m[1] };
+    if ((m = /Edg\/([\d.]+)/.exec(ua))) return { engine: "V8", browser: "Edge", version: m[1] };
+    if ((m = /OPR\/([\d.]+)/.exec(ua))) return { engine: "V8", browser: "Opera", version: m[1] };
+    if ((m = /Chrome\/([\d.]+)/.exec(ua))) return { engine: "V8", browser: "Chrome", version: m[1] };
+    if ((m = /Version\/([\d.]+).*Safari/.exec(ua))) return { engine: "JavaScriptCore", browser: "Safari", version: m[1] };
+    return { engine: "JavaScript", browser: "browser", version: "" };
+  }
+
+  function refreshHeap() {
+    var h = loadHeap();
+    if (h) {
+      heapChip.textContent = "heap " + mb(h.used);
+      heapChip.title = "V8 JS heap of this page: " + mb(h.used) + " used of " + mb(h.total) + " (limit " + mb(h.limit) + ")";
+    } else {
+      heapChip.textContent = "heap n/a";
+      heapChip.title = "performance.memory is only exposed by Chromium browsers";
+    }
+  }
+
+  function renderEnv() {
+    var info = engineInfo();
+    var h = loadHeap();
+    var rows = [
+      ["JS engine", info.engine + (info.version ? " (" + info.browser + " " + info.version + ")" : "")],
+      ["Runner", "Web Worker · fresh context per run"],
+      ["CPU cores", navigator.hardwareConcurrency ? String(navigator.hardwareConcurrency) : "unknown"],
+      ["Device memory", navigator.deviceMemory ? navigator.deviceMemory + " GB" : "not exposed"],
+      ["JS heap", h ? mb(h.used) + " / " + mb(h.limit) : "not exposed"],
+      ["Timeout", (execTimeout() / 1000) + "s per run"]
+    ];
+    var html = "<h3>Runtime</h3>";
+    rows.forEach(function (r) {
+      html += "<div class='row'><span>" + esc(r[0]) + "</span><span>" + esc(r[1]) + "</span></div>";
+    });
+    html += "<p class='note'>Code runs in an isolated worker thread with its own global scope, so page state is never touched and runaway loops can be killed.</p>";
+    $("envPop").innerHTML = html;
+    $("engineLabel").textContent = info.engine + (navigator.hardwareConcurrency ? " · " + navigator.hardwareConcurrency + " cores" : "");
+    $("sbEngine").textContent = info.engine + (info.version ? " " + info.version : "");
+  }
+
+  $("envPop").addEventListener("click", function (e) { e.stopPropagation(); });
+
+  $("envBtn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    var pop = $("envPop");
+    var open = pop.classList.toggle("open");
+    $("envBtn").setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) renderEnv();
+  });
+  document.addEventListener("click", function () {
+    $("envPop").classList.remove("open");
+    $("envBtn").setAttribute("aria-expanded", "false");
+  });
+  limitSel.addEventListener("change", function () {
+    renderEnv();
+    toast("Timeout set to " + (execTimeout() / 1000) + "s");
+  });
+
+  /* =========================================================
+     Snippet list
+     ========================================================= */
+  function loadSnippet(id, announce) {
+    var snip = null;
+    for (var i = 0; i < SNIPPETS.length; i++) if (SNIPPETS[i].id === id) snip = SNIPPETS[i];
+    if (!snip) return;
+    state.currentId = snip.id;
+    ta.value = snip.code;
+    state.errorLine = null;
+    editorSub.textContent = snip.file;
+    $("sbSnippet").textContent = snip.file;
+    snipSelect.value = snip.id;
+    Array.prototype.forEach.call(snipList.querySelectorAll(".snip"), function (el) {
+      el.classList.toggle("active", el.getAttribute("data-id") === snip.id);
+    });
+    ta.setSelectionRange(0, 0);
+    ta.scrollTop = 0;
+    syncAll();
+    clearConsole(true);
+    if (announce) toast("Loaded “" + snip.title + "”");
+  }
+
+  function renderSnippets(filter) {
+    var q = (filter || "").trim().toLowerCase();
+    var groups = {};
+    var order = [];
+    SNIPPETS.forEach(function (s) {
+      var haystack = (s.title + " " + s.blurb + " " + s.tag + " " + s.group).toLowerCase();
+      if (q && haystack.indexOf(q) === -1) return;
+      if (!groups[s.group]) { groups[s.group] = []; order.push(s.group); }
+      groups[s.group].push(s);
+    });
+    if (!order.length) {
+      snipList.innerHTML = "<div class='snip-group' style='text-transform:none;letter-spacing:0'>No match</div>";
+      return;
+    }
+    var html = "";
+    order.forEach(function (g) {
+      html += "<div class='snip-group'>" + esc(g) + "</div>";
+      groups[g].forEach(function (s) {
+        html += "<button class='snip" + (s.id === state.currentId ? " active" : "") + "' data-id='" + s.id + "' title='" + esc(s.blurb) + "'>" +
+          "<span class='snip-name'>" + esc(s.title) + "</span>" +
+          "<span class='snip-meta'><span class='tag t-" + s.tag + "'>" + s.tag + "</span>" +
+          "<span>" + s.code.split("\n").length + " lines</span></span>" +
+          "</button>";
+      });
+    });
+    snipList.innerHTML = html;
+  }
+
+  snipList.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest(".snip") : null;
+    if (!btn) return;
+    loadSnippet(btn.getAttribute("data-id"), true);
+  });
+
+  snipSearch.addEventListener("input", function () { renderSnippets(snipSearch.value); });
+
+  snipSelect.addEventListener("change", function () { loadSnippet(snipSelect.value, true); });
+
+  /* =========================================================
+     Splitter
+     ========================================================= */
+  (function initSplitter() {
+    var drag = false;
+    var rect = null;
+    splitter.addEventListener("pointerdown", function (e) {
+      drag = true;
+      rect = document.querySelector(".workspace").getBoundingClientRect();
+      document.body.classList.add("dragging");
+      try { splitter.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      e.preventDefault();
+    });
+    splitter.addEventListener("pointermove", function (e) {
+      if (!drag) return;
+      var width = rect.right - e.clientX;
+      var max = rect.width * 0.7;
+      width = Math.max(240, Math.min(width, max));
+      consolePane.style.width = width + "px";
+      scheduleSave();
+    });
+    var stop = function () {
+      if (!drag) return;
+      drag = false;
+      document.body.classList.remove("dragging");
+    };
+    splitter.addEventListener("pointerup", stop);
+    splitter.addEventListener("pointercancel", stop);
+    window.addEventListener("pointerup", stop);
+  })();
+
+  /* =========================================================
+     Boot
+     ========================================================= */
+  function boot() {
+    var saved = store.get(KEY, null);
+
+    SNIPPETS.forEach(function (s) {
+      var opt = document.createElement("option");
+      opt.value = s.id;
+      opt.textContent = s.title;
+      snipSelect.appendChild(opt);
+    });
+
+    if (saved && saved.split) consolePane.style.width = saved.split;
+
+    var startId = (saved && saved.id && SNIPPETS.some(function (s) { return s.id === saved.id; })) ? saved.id : SNIPPETS[0].id;
+    loadSnippet(startId, false);
+    if (saved && typeof saved.code === "string" && saved.code.trim()) {
+      ta.value = saved.code;
+      syncAll();
+      clearConsole(true);
+    }
+
+    renderSnippets("");
+    renderEnv();
+    refreshHeap();
+    clearConsole(true);
+    $("sbSaved").textContent = saved ? "restored" : "ready";
+
+    setInterval(refreshHeap, 4000);
+    ta.focus();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
